@@ -39,6 +39,85 @@ def isToInternalRepo = this.ext.has("isToInternalRepo")
 //println "ext Show install gradle library_pom_bintray_GroupId : "+this.ext.library_pom_bintray_GroupId
 //
 //println "ext Show install gradle archivesBaseName : "+archivesBaseName
+
+
+if (checkIsAndroidProject()) {
+    task androidJavadocs(type: Javadoc) {
+//        title = "${getStringProperty("mavProjectName")} ${project.version} API"
+        description "Generates Javadoc"
+        source = android.sourceSets.main.java.srcDirs
+//        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+        classpath += files(android.bootClasspath)
+
+        android.libraryVariants.all { variant ->
+            if (variant.name == 'release') {
+                owner.classpath += variant.javaCompileProvider.get().classpath
+            }
+        }
+        exclude '**/R.html', '**/R.*.html', '**/index.html', '**/*.kt'
+        options {
+//            windowTitle("${getStringProperty("mavProjectName")} ${project.version} Reference")
+            locale = 'en_US'
+            encoding = 'UTF-8'
+            charSet = 'UTF-8'
+            links("http://docs.oracle.com/javase/7/docs/api/")
+            linksOffline("http://d.android.com/reference", "${android.sdkDirectory}/docs/reference")
+            setMemberLevel(JavadocMemberLevel.PUBLIC)
+        }
+    }
+
+//    def jniSymbolsJar = task("${variant.name}SymbolJar", type: Jar, dependsOn: 'build') {
+//        classifier = "so-symbols"
+//        boolean hasNativeBuildTask = false
+//        tasks.each { task ->
+//            if (task.getName().startsWith("externalNativeBuild")) {
+//                hasNativeBuildTask = true
+//            }
+//        }
+//
+//        if (!hasNativeBuildTask) {
+//            return
+//        }
+//
+//        if (hasFlavors) {
+//            variant.productFlavors.each { flavor ->
+//                from file("build/intermediates/cmake/${flavor.name}/release/obj/")
+//            }
+//        } else {
+//            from file("build/intermediates/cmake/release/obj/")
+//        }
+//
+//    }
+
+    task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
+        classifier = 'javadoc'
+        baseName = pomArtifactId
+        from androidJavadocs.destinationDir
+    }
+
+    task androidSourcesJar(type: Jar) {
+        classifier = 'sources'
+        baseName = pomArtifactId
+        from android.sourceSets.main.java.srcDirs
+    }
+} else { //Here is pure java
+    tasks.withType(JavaCompile) { //Here is pure java
+        options.encoding = 'UTF-8'
+    }
+
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier = 'javadoc'
+        archiveClassifier = 'javadoc'
+        baseName = pomArtifactId
+        from javadoc.destinationDir
+    }
+}
+
 publishing {
     publications {
         //  publishing.publications.create(variant.name, MavenPublication) {
@@ -215,10 +294,10 @@ publishing {
             //https://docs.gradle.org/current/userguide/publishing_customization.html
             mavenJava(MavenPublication) {
                 println("Maven publish : Java Type")
-//                from components.java
-                artifact jar
-                artifact sourcesJar
-                artifact javadocJar
+                from components.java
+//                artifact jar
+//                artifact sourcesJar
+//                artifact javadocJar
                 pom {
                     name = pomArtifactId
                     description = this.ext.mavLibraryDescription
@@ -332,82 +411,7 @@ publishing {
 }
 
 
-if (checkIsAndroidProject()) {
-    task androidJavadocs(type: Javadoc) {
-//        title = "${getStringProperty("mavProjectName")} ${project.version} API"
-        description "Generates Javadoc"
-        source = android.sourceSets.main.java.srcDirs
-//        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
-        classpath += files(android.bootClasspath)
 
-        android.libraryVariants.all { variant ->
-            if (variant.name == 'release') {
-                owner.classpath += variant.javaCompileProvider.get().classpath
-            }
-        }
-        exclude '**/R.html', '**/R.*.html', '**/index.html', '**/*.kt'
-        options {
-//            windowTitle("${getStringProperty("mavProjectName")} ${project.version} Reference")
-            locale = 'en_US'
-            encoding = 'UTF-8'
-            charSet = 'UTF-8'
-            links("http://docs.oracle.com/javase/7/docs/api/")
-            linksOffline("http://d.android.com/reference", "${android.sdkDirectory}/docs/reference")
-            setMemberLevel(JavadocMemberLevel.PUBLIC)
-        }
-    }
-
-//    def jniSymbolsJar = task("${variant.name}SymbolJar", type: Jar, dependsOn: 'build') {
-//        classifier = "so-symbols"
-//        boolean hasNativeBuildTask = false
-//        tasks.each { task ->
-//            if (task.getName().startsWith("externalNativeBuild")) {
-//                hasNativeBuildTask = true
-//            }
-//        }
-//
-//        if (!hasNativeBuildTask) {
-//            return
-//        }
-//
-//        if (hasFlavors) {
-//            variant.productFlavors.each { flavor ->
-//                from file("build/intermediates/cmake/${flavor.name}/release/obj/")
-//            }
-//        } else {
-//            from file("build/intermediates/cmake/release/obj/")
-//        }
-//
-//    }
-
-    task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
-        classifier = 'javadoc'
-        baseName = pomArtifactId
-        from androidJavadocs.destinationDir
-    }
-
-    task androidSourcesJar(type: Jar) {
-        classifier = 'sources'
-        baseName = pomArtifactId
-        from android.sourceSets.main.java.srcDirs
-    }
-} else { //Here is pure java
-    tasks.withType(JavaCompile) { //Here is pure java
-        options.encoding = 'UTF-8'
-    }
-
-    task sourcesJar(type: Jar, dependsOn: classes) {
-        classifier = 'sources'
-        from sourceSets.main.allSource
-    }
-
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier = 'javadoc'
-        archiveClassifier = 'javadoc'
-        baseName = pomArtifactId
-        from javadoc.destinationDir
-    }
-}
 ////Ref : https://developer.android.com/studio/build/maven-publish-plugin
 ////Ref : https://docs.gradle.org/current/userguide/publishing_maven.html#publishing_maven:tasks
 ////Ref : https://stackoverflow.com/questions/26874498/publish-an-android-library-to-maven-with-aar-and-source-jar

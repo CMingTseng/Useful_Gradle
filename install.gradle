@@ -16,14 +16,13 @@ apply plugin: 'maven-publish'
 //group = this.ext.library_pom_bintray_GroupId
 version = this.project.version
 group = this.project.group
-archivesBaseName  = this.archivesBaseName
 
 println "Show library version: "+version
 println "Show library group : "+group
-println "Show library archivesBaseName : "+archivesBaseName
+println "Show library archivesBaseName : "+ this.archivesBaseName
 //FIXME  the library name must(?) the same project name ??!!  how set it diff ?
 //FIXME Modify project archivesBaseName to modify library name
-def pomArtifactId =  this.archivesBaseName                         // Maven library name for the artifact
+def pomArtifactId =  this.archivesBaseName.replace("-","_")                        // Maven library name for the artifact
 tasks.withType(Javadoc).all { enabled = false }//disable gen JavaDoc !!!
 
 def checkIsAndroidProject() {
@@ -86,7 +85,7 @@ publishing {
                         "$publicationName"(MavenPublication) {
                             groupId = this.project.group
 //                        artifactId "$project.name-$variant.flavorName"
-                            artifactId "${this.archivesBaseName}-$publicationName"
+                            artifactId "${this.archivesBaseName.replace("-","_")}_$publicationName"
                             version = this.project.version
 //                      version = this.ext.library_versionName
 //
@@ -144,7 +143,7 @@ publishing {
                     } else {
                         "$build_type"(MavenPublication) {
                             groupId = this.project.group
-                            artifactId = this.archivesBaseName
+                            artifactId = this.archivesBaseName.replace("-","_")
                             version = this.project.version
                             def taskname = "bundle" + build_type.substring(0, 1).toUpperCase() + build_type.substring(1) + "Aar"
                             println "install Show libraryVariants taskname : " + taskname
@@ -532,7 +531,7 @@ if (checkIsAndroidProject()) {
 ////}
 //
 def decoratePom(pom) {
-    pom.name = this.archivesBaseName
+    pom.name = this.archivesBaseName.replace("-","_")
     pom.description = this.ext.mavLibraryDescription
     pom.url = this.ext.mavSiteUrl
     pom.inceptionYear = new Date().format("yyyy-MM-dd").toString()

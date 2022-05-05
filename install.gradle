@@ -12,12 +12,19 @@
 //Ref : https://juejin.im/post/6844904144386392071
 //https://www.jianshu.com/p/960a60a84339
 apply plugin: 'maven-publish'
-version = this.ext.library_versionName
-group = this.ext.library_pom_bintray_GroupId
+//version = this.ext.library_versionName
+//group = this.ext.library_pom_bintray_GroupId
+version = this.project.version
+group = this.project.group
+archivesBaseName  = this.archivesBaseName
 
+println "Show library version: "+version
+println "Show library group : "+group
+println "Show library archivesBaseName : "+archivesBaseName
 //FIXME  the library name must(?) the same project name ??!!  how set it diff ?
-def pomArtifactId = project.name                         // Maven library name for the artifact
-tasks.withType(Javadoc).all { enabled = false }
+//FIXME Modify project archivesBaseName to modify library name
+def pomArtifactId =  this.archivesBaseName                         // Maven library name for the artifact
+tasks.withType(Javadoc).all { enabled = false }//disable gen JavaDoc !!!
 
 def checkIsAndroidProject() {
     def plugins = project.getPlugins()
@@ -30,7 +37,9 @@ def isToRemoteRepo = this.ext.has("isToRemoteRepo")
 def isToSonatype_Nexus = this.ext.has("isToSonatype_Nexus")
 def isToInternalRepo = this.ext.has("isToInternalRepo")
 
-this.ext.library_pom_bintray_GroupId
+//println "ext Show install gradle library_pom_bintray_GroupId : "+this.ext.library_pom_bintray_GroupId
+//
+//println "ext Show install gradle archivesBaseName : "+archivesBaseName
 publishing {
     publications {
         //  publishing.publications.create(variant.name, MavenPublication) {
@@ -75,10 +84,10 @@ publishing {
 
                         //create(variant.name, MavenPublication) {
                         "$publicationName"(MavenPublication) {
-                            groupId = this.ext.library_pom_bintray_GroupId
+                            groupId = this.project.group
 //                        artifactId "$project.name-$variant.flavorName"
-                            artifactId "$project.name-$publicationName"
-                            version = android.defaultConfig.versionName
+                            artifactId "${this.archivesBaseName}-$publicationName"
+                            version = this.project.version
 //                      version = this.ext.library_versionName
 //
 //                      from components.findByName("android${variant.name.capitalize()}")
@@ -97,7 +106,7 @@ publishing {
 ////                            name name.replace('-' + variant.name, '')//necessary to get rid of the suffix from the folder name
 //                            }
 //                        }
-                            println "install Show libraryVariants archivetask archives : " + archivetask.archivePath.name
+                            println "install Show libraryVariants archive task archives : " + archivetask.archivePath.name
 //                        artifact tasks.findByName(taskname)
                             artifact archivetask
 //                        pom {
@@ -134,10 +143,9 @@ publishing {
                         }
                     } else {
                         "$build_type"(MavenPublication) {
-                            groupId = this.ext.library_pom_bintray_GroupId
-                            artifactId = project.name
-                            version = android.defaultConfig.versionName
-//                        version = this.ext.library_versionName
+                            groupId = this.project.group
+                            artifactId = this.archivesBaseName
+                            version = this.project.version
                             def taskname = "bundle" + build_type.substring(0, 1).toUpperCase() + build_type.substring(1) + "Aar"
                             println "install Show libraryVariants taskname : " + taskname
                             def archivetask = tasks.findByName(taskname)
@@ -188,7 +196,7 @@ publishing {
 //                        }
                         }
                     }
-                }else {
+                } else {
                     // Only consider release
                     if (variant.buildType.name != "release") {
                         return
@@ -207,7 +215,7 @@ publishing {
         } else {
             //https://docs.gradle.org/current/userguide/publishing_customization.html
             mavenJava(MavenPublication) {
-                println("Maven publish: package name JJJ")
+                println("Maven publish : Java Type")
 //                from components.java
                 artifact jar
                 artifact sourcesJar
@@ -262,8 +270,6 @@ publishing {
 //        mavenJava(MavenPublication) {
 //
 //        }
-
-
     }
 
     repositories {
@@ -316,7 +322,7 @@ publishing {
 //            //TODO Project local repo
         if (isToInternalRepo) {
             maven {
-                url = 'file://' + new File(System.getProperty('user.home'), '.m2/repository').absolutePath
+                url = 'file://' + new File(System.getProperty('user.home'), '.m2'+File.separator+'repository').absolutePath
             }
         }
 
@@ -526,7 +532,7 @@ if (checkIsAndroidProject()) {
 ////}
 //
 def decoratePom(pom) {
-    pom.name = project.name
+    pom.name = this.archivesBaseName
     pom.description = this.ext.mavLibraryDescription
     pom.url = this.ext.mavSiteUrl
     pom.inceptionYear = new Date().format("yyyy-MM-dd").toString()
@@ -575,16 +581,21 @@ def addDependencies(pom) {
 }
 
 def manageConfigurations(configurations) {
-    configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
-    configurations.testImplementation.getDependencies().each { dep -> addDependency(dep, "test") }
-    configurations.testCompile.getDependencies().each { dep -> addDependency(dep, "test") }
-    if (!checkIsAndroidProject()) {
-        configurations.implementation.getDependencies().each { dep -> addDependency(dep, "runtime") }
-        configurations.runtime.getDependencies().each { dep -> addDependency(dep, "runtime") }
-        configurations.testRuntime.getDependencies().each { dep -> addDependency(dep, "test") }
+    def gradle_main_version = Integer.parseInt(gradle.gradleVersion.toString().split("\\.")[0])
+    if (gradle_main_version > 6) {
+        if (!checkIsAndroidProject()) {
+            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.runtime.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.testRuntime.getDependencies().each { dep -> addDependency(dep, "test") }
+        } else {
+            configurations.api.getDependencies().each { dep -> addDependency(dep, "compile") }
+            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "compile") }
+            configurations.compileOnly.getDependencies().each { dep -> addDependency(dep, "runtime") }
+        }
+        configurations.testImplementation.getDependencies().each { dep -> addDependency(dep, "test") }
     } else {
-        configurations.api.getDependencies().each { dep -> addDependency(dep, "compile") }
-        configurations.implementation.getDependencies().each { dep -> addDependency(dep, "compile") }
+        configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
+        configurations.testCompile.getDependencies().each { dep -> addDependency(dep, "test") }
     }
 }
 

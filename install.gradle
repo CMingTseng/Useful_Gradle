@@ -292,12 +292,12 @@ publishing {
             }
         } else {
             //https://docs.gradle.org/current/userguide/publishing_customization.html
+            //https://stackoverflow.com/questions/41825699/publishing-artifactswith-sources-and-javadoc-with-gradle
             mavenJava(MavenPublication) {
                 println("Maven publish : Java Type")
                 from components.java
-//                artifact jar
-//                artifact sourcesJar
-//                artifact javadocJar
+                artifact sourcesJar
+                artifact javadocJar
                 pom {
                     name = pomArtifactId
                     description = this.ext.mavLibraryDescription
@@ -409,8 +409,6 @@ publishing {
         }
     }
 }
-
-
 
 ////Ref : https://developer.android.com/studio/build/maven-publish-plugin
 ////Ref : https://docs.gradle.org/current/userguide/publishing_maven.html#publishing_maven:tasks

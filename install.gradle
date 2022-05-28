@@ -380,6 +380,7 @@ publishing {
                     maven {
                         name 'Sonatype_Nexus'
                         url this.ext.Sonatype_NexusUrl_Url
+                        allowInsecureProtocol = true
                         credentials {
                             username props['sonatype.user']
                             password props['sonatype.password']

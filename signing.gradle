@@ -22,7 +22,7 @@ subprojects { it ->
 
     it.afterEvaluate { sp ->
         sp.plugins.withId('com.android.application') { plugin ->
-            println "Show is Android Application  !! "
+//            println "Show is Android Application  !! "
 //            def extend_android = plugin.properties["extension"]
 //            extend_android.applicationVariants.all { variant ->
 //                def flavor_with_buildtype = variant.name.capitalize()

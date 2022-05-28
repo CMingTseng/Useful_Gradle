@@ -1,0 +1,206 @@
+buildscript {
+    repositories {
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath "de.undercouch:gradle-download-task:5.1.0"
+    }
+}
+
+subprojects { it ->
+    apply plugin: "de.undercouch.download"
+    def task_names = []
+//    def exten = it.extensions.getByName("android")
+//    println "Get exten $exten"
+//    it.beforeEvaluate { sp ->
+//        println "beforeEvaluate !!"
+////        println "Show project. buildFile text "+sp.buildFile.text
+//        println "Show project. buildFile text " + sp.buildFile.text
+//    }
+
+    it.afterEvaluate { sp ->
+        sp.plugins.withId('com.android.application') { plugin ->
+            println "Show is Android Application  !! "
+//            def extend_android = plugin.properties["extension"]
+//            extend_android.applicationVariants.all { variant ->
+//                def flavor_with_buildtype = variant.name.capitalize()
+//                task_names.add(flavor_with_buildtype)
+//            }
+            //        def exten = sp.extensions.getByName("android")
+//        println "Get exten $exten"
+            sp.extensions.getByName("android").applicationVariants.all { variant ->
+                def flavor_with_buildtype = variant.name.capitalize()
+                def properties_key = flavor_with_buildtype + "_properties_file"
+                println "Show flavor_with_buildtype : " + flavor_with_buildtype
+//            task_names.add(flavor_with_buildtype)
+                tasks.create(name: "downloadFile${flavor_with_buildtype}", type: Download) {
+                    group "downloadFile"
+                    println "DownloadFile Go !${flavor_with_buildtype}!!"
+                    Properties props = new Properties()
+//                def release_properties_file = project.ext.get('release_properties_file')
+                    def release_properties_file = project.ext.get(properties_key)
+                    println "Show  properties_file : " + release_properties_file
+                    props.load(new URL(release_properties_file).openStream())
+                    def keystore_url_path = props['keystore_url_path'].trim()
+                    println "Show keystore_url_path at task  " + keystore_url_path
+                    def keystore_src_file_name = props['keystore_src_file_name'].trim()
+                    println "Show keystore_src_file_name done " + keystore_src_file_name
+                    def keystore_file_arch = props['keystore_file_arch']
+                    println "Show keystore_file_arch done " + keystore_file_arch
+                    def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
+                    src src_path
+                    dest buildDir
+                    println "DownloadFile Done !!!"
+                }
+                def first_task_name = "download${flavor_with_buildtype}FileAndUnZip"
+                def pre_task_name = "pre${flavor_with_buildtype}Build"
+//            tasks.create(name: first_task_name, type: Download) {
+//                group "download_with_unZip"
+//                println "DownloadFile Go !!!"
+//                Properties props = new Properties()
+//                def release_properties_file = project.ext.get('release_properties_file')
+//                println "Show  properties_file : " + release_properties_file
+//                props.load(new URL(release_properties_file).openStream())
+//                def keystore_url_path = props['keystore_url_path'].trim()
+//                println "Show keystore_url_path at task  " + keystore_url_path
+//                def keystore_src_file_name = props['keystore_src_file_name'].trim()
+//                println "Show keystore_src_file_name done " + keystore_src_file_name
+//                def keystore_file_arch = props['keystore_file_arch']
+//                println "Show keystore_file_arch done " + keystore_file_arch
+//                def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
+//                def file_name = keystore_src_file_name + keystore_file_arch
+//                src src_path
+//                dest new File(buildDir, file_name)
+//            }
+//
+////            tasks.all { Task task ->
+////                if (task.name.matches(first_task_name)) {
+////                    println "!!!! $task.name - $task.description"
+////                }
+////            }
+//
+//            tasks.create(name: "downloadZipFile${flavor_with_buildtype}",dependsOn: "downloadZipFile${flavor_with_buildtype}", type: Copy ) {
+//                group "download_with_unZip"
+//                from zipTree( first_task_name.dest)
+//                into buildDir
+//            }
+
+                tasks.create(name: "${first_task_name}") {
+                    group "download_with_unZip"
+//                println "DownloadFile Go !${flavor_with_buildtype}!!"
+//                println "Show properties_key : "+properties_key
+                    Properties props = new Properties()
+                    def properties_file = project.ext.get(properties_key)
+                    println "Show  properties_file : " + properties_file
+                    props.load(new URL(properties_file).openStream())
+                    def keystore_url_path = props['keystore_url_path'].trim()
+                    println "Show keystore_url_path at task  " + keystore_url_path
+                    def keystore_src_file_name = props['keystore_src_file_name'].trim()
+                    println "Show keystore_src_file_name done " + keystore_src_file_name
+                    def keystore_file_arch = props['keystore_file_arch']
+                    println "Show keystore_file_arch done " + keystore_file_arch
+                    def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
+                    File zip_file = new File(buildDir, keystore_src_file_name + keystore_file_arch)
+                    download {
+                        src src_path
+                        dest zip_file
+                        overwrite true
+                    }
+                    copy {
+                        from zipTree(zip_file)
+                        into buildDir
+                    }
+                    zip_file.delete()
+                }
+
+                tasks.all { Task task ->
+                    def task_1
+                    def task_2
+                    if (task.name.matches(pre_task_name)) {
+                        task_1 = task
+//                    if (task_1!=null&& task_2!=null) {
+//                        task_1.dependsOn task_2
+//                    }
+                    }
+                    if (task.name.matches(first_task_name)) {
+//                  preBuild.dependsOn task
+                        task_2 = task
+//                  if (task_1!=null&& task_2!=null) {
+//                      task_1.dependsOn task_2
+//                  }
+                    }
+                    if (task_1 != null && task_2 != null) {
+                        task_1.dependsOn task_2
+                    }
+                }
+//        defaultTasks 'downloadAndUnzipFile'
+//        preBuild.dependsOn downloadAndUnzipFile
+            }
+
+//        sp.properties.each { pro->
+//            println "Show properties :    $pro"
+//        }
+//        sp.plugins.each { plug->
+//
+//            println "Show plug :    $plug"
+//
+//        }
+//        sp.plugins.withId('com.android.build.gradle.api.AndroidBasePlugin'){
+//            println "Show plug  TTT :    $plug"
+//        }
+
+//        task downloadFile(type: Download) {
+//            group "downloadFile"
+//            println "DownloadFile Go !!!"
+//            Properties props = new Properties()
+//            def release_properties_file = project.ext.get('release_properties_file')
+//            println "Show  properties_file : " + release_properties_file
+//            props.load(new URL(release_properties_file).openStream())
+//            def keystore_url_path = props['keystore_url_path'].trim()
+//            println "Show keystore_url_path at task  " + keystore_url_path
+//            def keystore_src_file_name = props['keystore_src_file_name'].trim()
+//            println "Show keystore_src_file_name done " + keystore_src_file_name
+//            def keystore_file_arch = props['keystore_file_arch']
+//            println "Show keystore_file_arch done " + keystore_file_arch
+//            def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
+//            src src_path
+//            dest buildDir
+//            println "DownloadFile Done !!!"
+//        }
+//
+//        task downloadZipFile(type: Download) {
+//            group "download_with_unZip"
+//            println "DownloadFile Go !!!"
+//            Properties props = new Properties()
+//            def release_properties_file = project.ext.get('release_properties_file')
+//            println "Show  properties_file : " + release_properties_file
+//            props.load(new URL(release_properties_file).openStream())
+//            def keystore_url_path = props['keystore_url_path'].trim()
+//            println "Show keystore_url_path at task  " + keystore_url_path
+//            def keystore_src_file_name = props['keystore_src_file_name'].trim()
+//            println "Show keystore_src_file_name done " + keystore_src_file_name
+//            def keystore_file_arch = props['keystore_file_arch']
+//            println "Show keystore_file_arch done " + keystore_file_arch
+//            def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
+//            def file_name = keystore_src_file_name + keystore_file_arch
+//            src src_path
+//            dest new File(buildDir, file_name)
+//        }
+//
+//        task downloadAndUnzipFile(dependsOn: downloadZipFile, type: Copy) {
+//            group "download_with_unZip"
+//            from zipTree(downloadZipFile.dest)
+//            into buildDir
+//        }
+//
+//        defaultTasks 'downloadAndUnzipFile'
+//        preBuild.dependsOn downloadAndUnzipFile
+//        preBuild.dependsOn downloadFile
+        }
+    }
+}
+
+ 

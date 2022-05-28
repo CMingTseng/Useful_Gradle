@@ -12,7 +12,6 @@ buildscript {
 
 subprojects { it ->
     apply plugin: "de.undercouch.download"
-    def task_names = []
 //    def exten = it.extensions.getByName("android")
 //    println "Get exten $exten"
 //    it.beforeEvaluate { sp ->
@@ -34,26 +33,24 @@ subprojects { it ->
             sp.extensions.getByName("android").applicationVariants.all { variant ->
                 def flavor_with_buildtype = variant.name.capitalize()
                 def properties_key = flavor_with_buildtype + "_properties_file"
-                println "Show flavor_with_buildtype : " + flavor_with_buildtype
-//            task_names.add(flavor_with_buildtype)
+//                println "Show flavor_with_buildtype : " + flavor_with_buildtype
                 tasks.create(name: "downloadFile${flavor_with_buildtype}", type: Download) {
                     group "downloadFile"
-                    println "DownloadFile Go !${flavor_with_buildtype}!!"
+//                    println "DownloadFile Go !${flavor_with_buildtype}!!"
                     Properties props = new Properties()
-//                def release_properties_file = project.ext.get('release_properties_file')
-                    def release_properties_file = project.ext.get(properties_key)
-                    println "Show  properties_file : " + release_properties_file
-                    props.load(new URL(release_properties_file).openStream())
+                    def properties_file = project.ext.get(properties_key)
+//                    println "Show  properties_file : " + properties_file
+                    props.load(new URL(properties_file ).openStream())
                     def keystore_url_path = props['keystore_url_path'].trim()
-                    println "Show keystore_url_path at task  " + keystore_url_path
+//                    println "Show keystore_url_path at task  " + keystore_url_path
                     def keystore_src_file_name = props['keystore_src_file_name'].trim()
-                    println "Show keystore_src_file_name done " + keystore_src_file_name
+//                    println "Show keystore_src_file_name done " + keystore_src_file_name
                     def keystore_file_arch = props['keystore_file_arch']
-                    println "Show keystore_file_arch done " + keystore_file_arch
+//                    println "Show keystore_file_arch done " + keystore_file_arch
                     def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
                     src src_path
                     dest buildDir
-                    println "DownloadFile Done !!!"
+//                    println "DownloadFile Done !!!"
                 }
                 def first_task_name = "download${flavor_with_buildtype}FileAndUnZip"
                 def pre_task_name = "pre${flavor_with_buildtype}Build"
@@ -94,14 +91,14 @@ subprojects { it ->
 //                println "Show properties_key : "+properties_key
                     Properties props = new Properties()
                     def properties_file = project.ext.get(properties_key)
-                    println "Show  properties_file : " + properties_file
+//                    println "Show  properties_file : " + properties_file
                     props.load(new URL(properties_file).openStream())
                     def keystore_url_path = props['keystore_url_path'].trim()
-                    println "Show keystore_url_path at task  " + keystore_url_path
+//                    println "Show keystore_url_path at task  " + keystore_url_path
                     def keystore_src_file_name = props['keystore_src_file_name'].trim()
-                    println "Show keystore_src_file_name done " + keystore_src_file_name
+//                    println "Show keystore_src_file_name done " + keystore_src_file_name
                     def keystore_file_arch = props['keystore_file_arch']
-                    println "Show keystore_file_arch done " + keystore_file_arch
+//                    println "Show keystore_file_arch done " + keystore_file_arch
                     def src_path = keystore_url_path + keystore_src_file_name + keystore_file_arch
                     File zip_file = new File(buildDir, keystore_src_file_name + keystore_file_arch)
                     download {

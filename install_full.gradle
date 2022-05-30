@@ -1,0 +1,641 @@
+//Ref : https://raw.githubusercontent.com/nuuneoi/JCenter/master/installv1.gradle
+//Ref : https://stackoverflow.com/questions/49207307/how-to-publish-all-flavor-variants-to-maven-with-android-gradle-plugin-3-0-0
+//Ref : https://stackoverflow.com/questions/26874498/publish-an-android-library-to-maven-with-aar-and-source-jar
+//Ref : https://proandroiddev.com/android-library-distribution-with-maven-publish-28ac59b8ecb8
+//Ref : https://docs.gradle.org/current/userguide/publishing_customization.html
+//Ref : https://kotlinlang.org/docs/mpp-publish-lib.html#publish-an-android-library
+//Ref : https://alessiobianchi.eu/blog/obfuscated-aar-local-maven/
+//Ref : https://gist.github.com/zhang-xue-feng/02aeb0ecebd5e4767f3d
+//Ref : https://www.py4u.net/discuss/612809
+//Ref : https://github.com/palantir/gradle-git-version
+//Ref : https://github.com/n0mer/gradle-git-properties
+//Ref : https://juejin.im/post/6844904144386392071
+//https://www.jianshu.com/p/960a60a84339
+apply plugin: 'maven-publish'
+//version = this.ext.library_versionName
+//group = this.ext.library_pom_bintray_GroupId
+version = this.project.version
+group = this.project.group
+
+println "Show library version: " + version
+println "Show library group : " + group
+println "Show library archivesBaseName : " + this.archivesBaseName
+//FIXME  the library name must(?) the same project name ??!!  how set it diff ?
+//FIXME Modify project archivesBaseName to modify library name
+def pomArtifactId = this.archivesBaseName.replace("-", "_")                        // Maven library name for the artifact
+tasks.withType(Javadoc).all { enabled = false }//disable gen JavaDoc !!!
+
+def checkIsAndroidProject() {
+    def plugins = project.getPlugins()
+    return plugins.hasPlugin('com.android.application') || plugins.hasPlugin('com.android.library')
+}
+
+def isAdvanced = this.ext.has("isAdvanced")
+def isToGit = this.ext.has("isToGit")
+def isToRemoteRepo = this.ext.has("isToRemoteRepo")
+def isToSonatype_Nexus = this.ext.has("isToSonatype_Nexus")
+def isToInternalRepo = this.ext.has("isToInternalRepo")
+
+//println "ext Show install gradle library_pom_bintray_GroupId : "+this.ext.library_pom_bintray_GroupId
+//
+//println "ext Show install gradle archivesBaseName : "+archivesBaseName
+
+
+if (checkIsAndroidProject()) {
+    task androidJavadocs(type: Javadoc) {
+//        title = "${getStringProperty("mavProjectName")} ${project.version} API"
+        description "Generates Javadoc"
+        source = android.sourceSets.main.java.srcDirs
+//        classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+        classpath += files(android.bootClasspath)
+
+        android.libraryVariants.all { variant ->
+            if (variant.name.contains("release")) {
+                owner.classpath += variant.javaCompileProvider.get().classpath
+            }
+        }
+        exclude '**/R.html', '**/R.*.html', '**/index.html', '**/*.kt'
+        options {
+//            windowTitle("${getStringProperty("mavProjectName")} ${project.version} Reference")
+            locale = 'en_US'
+            encoding = 'UTF-8'
+            charSet = 'UTF-8'
+            links("http://docs.oracle.com/javase/7/docs/api/")
+            linksOffline("http://d.android.com/reference", "${android.sdkDirectory}/docs/reference")
+            setMemberLevel(JavadocMemberLevel.PUBLIC)
+        }
+    }
+
+//    def jniSymbolsJar = task("${variant.name}SymbolJar", type: Jar, dependsOn: 'build') {
+//        classifier = "so-symbols"
+//        boolean hasNativeBuildTask = false
+//        tasks.each { task ->
+//            if (task.getName().startsWith("externalNativeBuild")) {
+//                hasNativeBuildTask = true
+//            }
+//        }
+//
+//        if (!hasNativeBuildTask) {
+//            return
+//        }
+//
+//        if (hasFlavors) {
+//            variant.productFlavors.each { flavor ->
+//                from file("build/intermediates/cmake/${flavor.name}/release/obj/")
+//            }
+//        } else {
+//            from file("build/intermediates/cmake/release/obj/")
+//        }
+//
+//    }
+
+    task androidJavadocsJar(type: Jar, dependsOn: androidJavadocs) {
+        classifier = 'javadoc'
+        baseName = pomArtifactId
+        from androidJavadocs.destinationDir
+    }
+
+    task androidSourcesJar(type: Jar) {
+        classifier = 'sources'
+        baseName = pomArtifactId
+        from android.sourceSets.main.java.srcDirs
+    }
+} else { //Here is pure java
+    tasks.withType(JavaCompile) { //Here is pure java
+        options.encoding = 'UTF-8'
+    }
+
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier = 'javadoc'
+        archiveClassifier = 'javadoc'
+        baseName = pomArtifactId
+        from javadoc.destinationDir
+    }
+}
+
+publishing {
+    publications {
+        //  publishing.publications.create(variant.name, MavenPublication) {
+        if (checkIsAndroidProject()) {
+            android.libraryVariants.all { variant ->
+                def flavor_with_buildtype = variant.name.capitalize()
+                println "install Show libraryVariants flavor with buildtype : " + flavor_with_buildtype
+                println "Show publications  android.libraryVariants : " + variant.buildType.name
+                println "Show publications  android.libraryVariants task variant.outputs[0].packageLibrary : " + variant.outputs[0].packageLibrary
+                def hasFlavors = !variant.flavorName.isEmpty()
+                def build_type = variant.buildType.name
+                def artifactIdSuffix = hasFlavors ? variant.flavorName.replace('_', '-').capitalize() : pomArtifactId
+                // Only consider release
+//                if (variant.buildType.name != "release") { return }
+//                if (variant.buildType.name.contains("debug")) {
+//                    return
+//                }
+//                if (flavor_with_buildtype.toLowerCase().contains("debug")) {
+//                    return
+//                }
+//                println "install Show libraryVariants hasFlavors : " + hasFlavors
+//                println "Show publications  current build_type : " + build_type
+                println "Show publications  full variant.name : " + flavor_with_buildtype
+                println "Show publications  current artifactIdSuffix : " + artifactIdSuffix
+                //All this gen all flavor with buildtype
+//                mavenAll(MavenPublication) {
+//                    from components.all
+//                }
+                def publicationName = "${variant.name.capitalize()}"
+                println "install Show libraryVariants publicationName  : " + publicationName
+                variant.outputs.all {
+                    //Here rename
+                    println "install Show libraryVariants outputs outputFileName : " + outputFileName
+//                            def appName = outputFileName.replace("-","_")
+//                            outputFileName = appName
+                    outputFileName = outputFileName.replace("-", "_")
+                    println "install Show libraryVariants outputs outputFileName !! : " + outputFileName
+                }
+//                if (isAdvanced) {
+//                    if (hasFlavors) {
+                println "install Show libraryVariants artifactIdSuffix  : " + artifactIdSuffix
+                //this  set applicationIdSuffix. applicationIdSuffix
+                variant.productFlavors.each { flavor ->
+                    println "install Show flavor_with_buildtype  : " + flavor_with_buildtype
+                    println "install Show libraryVariants flavor.name  : " + flavor.name
+                    def flavorArtifactIdSuffix = flavor.ext.has('artifactIdSuffix') ? flavor.ext.artifactIdSuffix : flavor.name
+                    if (!flavorArtifactIdSuffix.isEmpty()) {
+                        artifactIdSuffix = artifactIdSuffix.replace(flavor.name.capitalize(), "${flavorArtifactIdSuffix}")
+                    } else {
+                        artifactIdSuffix = artifactIdSuffix.replace(flavor.name.capitalize(), "")
+                    }
+                    println "install Show libraryVariants artifactIdSuffix  : " + artifactIdSuffix
+                }
+
+
+                //create(variant.name, MavenPublication) {
+                "$publicationName"(MavenPublication) {
+                    groupId = this.project.group
+                    println "install Show libraryVariants archivesBaseName : " + archivesBaseName
+                    artifactId "${this.archivesBaseName.replace("-", "_")}_$publicationName"
+                    println "install Show libraryVariants archivesBaseName : " + archivesBaseName
+                    version = this.project.version
+                    artifact androidJavadocsJar
+                    artifact androidSourcesJar
+//                            artifact jniSymbolsJar
+                    def taskname = "bundle" + flavor_with_buildtype.substring(0, 1).toUpperCase() + flavor_with_buildtype.substring(1) + "Aar"
+                    println "install Show libraryVariants flavor with buildtype taskname : " + taskname
+
+                    def archivetask = variant.outputs[0].packageLibrary
+                    println "install Show libraryVariants archive task archives archivePath : " + archivetask.archivePath
+                    println "install Show libraryVariants archive task archives : " + archivetask.archivePath.name
+                    artifact archivetask
+                    decoratePom(pom)
+                }
+//                    }
+//                    else {
+//                        "$build_type"(MavenPublication) {
+//                            groupId = this.project.group
+//                            artifactId = this.archivesBaseName.replace("-","_")
+//                            version = this.project.version
+//                            def taskname = "bundle" + build_type.substring(0, 1).toUpperCase() + build_type.substring(1) + "Aar"
+//                            println "install Show libraryVariants taskname : " + taskname
+//                            def archivetask = tasks.findByName(taskname)
+//                            artifacts {
+//                                archives(archivetask.archivePath) {
+////                            classifier null //necessary to get rid of the suffix in the artifact
+////                            builtBy taskname
+//                                    println "install Show libraryVariants archives name ?? : " + name
+////                            name name.replace('-' + variant.name, '')//necessary to get rid of the suffix from the folder name
+//                                }
+//                            }
+//
+////                        artifact tasks.findByName(taskname)
+//                            artifact archivetask
+////                        artifact tasks.findByName(taskname)
+//                            artifact androidJavadocsJar
+//                            artifact androidSourcesJar
+//                            decoratePom(pom)
+////                        pom {
+////                            name = pomArtifactId
+////                            description = this.ext.mavLibraryDescription
+////                            url = this.ext.mavSiteUrl
+////                            properties = [
+////                                    myProp          : "value",
+////                                    "prop.with.dots": "anotherValue"
+////                            ]
+////                            // Set your license
+////                            licenses {
+////                                license {
+////                                    this.ext.mavLibraryLicenses.each { key, value ->
+////                                        name = key
+////                                        url = value
+////                                    }
+////                                }
+////                            }
+////                            developers {
+////                                developer {
+////                                    id = this.ext.developerid
+////                                    name = this.ext.developername
+////                                    email = this.ext.developeremail
+////                                }
+////                            }
+////                            scm {
+////                                connection = this.ext.scmConnectionUrl
+////                                developerConnection = this.ext.scmDeveloperConnectionUrl
+////                                url = this.ext.scmUrl
+////                            }
+////                        }
+//                        }
+//                    }
+//                }
+//                else {
+////                    // Only consider release
+////                    if (variant.buildType.name != "release") {
+////                        return
+////                    }
+////                    if (variant.buildType.name.contains("debug")) {
+////                        return
+////                    }
+////                    release(MavenPublication) {
+////                        artifact bundleReleaseAar
+////                        artifact androidJavadocsJar
+////                        artifact androidSourcesJar
+////                        decoratePom(pom)
+////                    }
+//                }
+            }
+        } else {
+            //https://docs.gradle.org/current/userguide/publishing_customization.html
+            //https://stackoverflow.com/questions/41825699/publishing-artifactswith-sources-and-javadoc-with-gradle
+            mavenJava(MavenPublication) {
+                println("Maven publish : Java Type")
+                from components.java
+                artifact sourcesJar
+                artifact javadocJar
+                pom {
+                    name = pomArtifactId
+                    description = this.ext.mavLibraryDescription
+                    url = this.ext.mavSiteUrl
+                    properties = [
+                            myProp          : "value",
+                            "prop.with.dots": "anotherValue"
+                    ]
+                    // Set your license
+                    licenses {
+                        license {
+                            this.ext.mavLibraryLicenses.each { key, value ->
+                                name = key
+                                url = value
+                            }
+                        }
+                    }
+                    developers {
+                        developer {
+                            id = this.ext.developerid
+                            name = this.ext.developername
+                            email = this.ext.developeremail
+                        }
+                    }
+                    scm {
+                        connection = this.ext.scmConnectionUrl
+                        developerConnection = this.ext.scmDeveloperConnectionUrl
+                        url = this.ext.scmUrl
+                    }
+                }
+            }
+        }
+        //Ref : https://developer.android.google.cn/studio/build/maven-publish-plugin?hl=zh-cn
+//        // Creates a Maven publication called "release".
+//        release(MavenPublication) {
+//
+//        }
+//
+//        // Creates a Maven publication called “debug”.
+//        debug(MavenPublication) {
+//
+//        }
+
+//        maven(MavenPublication) {
+
+//        }
+
+//        mavenJava(MavenPublication) {
+//
+//        }
+    }
+
+    repositories {
+        //FIXME set true/false @ ext build.grale  !!
+        //FIXME get repo setting from reposetting file lie : repo_setting.properties !!!
+        //Ref : https://www.jianshu.com/p/960a60a84339
+        //Ref : https://www.itread01.com/content/1546745592.html
+        //Ref : https://medium.com/michael-%E9%9A%A8%E7%AD%86/another-way-to-create-a-private-maven-repository-9c6a45952228
+        //Ref : https://github.com/gradle/gradle/blob/master/subprojects/maven/src/main/java/org/gradle/api/publish/maven/tasks/PublishToMavenLocal.java
+        //Ref : https://github.com/mageddo/gradle-embed-maven-repo
+        //Ref : https://help.github.com/en/packages/using-github-packages-with-your-projects-ecosystem/configuring-gradle-for-use-with-github-packages
+        //Ref : https://github.com/hyysguyang/gradle-git-maven-repo-plugin
+        //Ref : https://html.developreference.com/article/15003154/Publish+a+zip+file+to+Nexus+(Maven)+with+Gradle
+        //FIXME use git public project as repo & use git push ?
+        if (isToGit) {
+            maven {
+//                    url = 'file://' + new File(System.getProperty('user.home'), '.m2/repository').absolutePath
+                url = "file:///${this.project.rootProject.rootDir}/maven-repository"
+            }
+        }
+//            //TODO build & deploy Sonatype Nexus or Git like  Repository
+//        if (isToRemoteRepo) {
+//            //nexus  maven_properties_file
+
+        File f = this.file('sonatype_nexus.properties')
+        def from_stream= project.ext.has("maven_properties_file")
+        def from_local_file= (f.exists() && !f.isDirectory())
+        def from_ext= project.ext.has("Sonatype_NexusUrl_Url")
+        println "install Show project  !!! : " + from_stream
+            Properties props = new Properties()
+            if (from_stream){
+                def properties_file = project.ext.get("maven_properties_file")
+                props.load(new URL(properties_file).openStream())
+                def maven_url_path = props['sonatype.path'].trim()
+                def repo_name = props['sonatype.repo.name'].trim()
+                maven {
+                    name 'Sonatype_Nexus'
+                    url maven_url_path+repo_name
+                    if (!maven_url_path.contains("https")){
+                        allowInsecureProtocol = true
+                    }
+                    credentials {
+                        username props['sonatype.user']
+                        password props['sonatype.password']
+                    }
+                }
+            }else if(from_local_file){
+                props.load(new FileInputStream(f))
+                def maven_url_path = props['sonatype.path'].trim()
+                def repo_name = props['sonatype.repo.name'].trim()
+                maven {
+                    name 'Sonatype_Nexus'
+                    url maven_url_path+repo_name
+                    if (!maven_url_path.contains("https")){
+                        allowInsecureProtocol = true
+                    }
+                    credentials {
+                        username props['sonatype.user']
+                        password props['sonatype.password']
+                    }
+                }
+            }else if(from_ext && from_local_file){
+                props.load(new FileInputStream(f))
+                def maven_url_path = this.ext.Sonatype_NexusUrl_Url
+                maven {
+                    name 'Sonatype_Nexus'
+                    url this.ext.Sonatype_NexusUrl_Url
+                    if (!maven_url_path.contains("https")){
+                        allowInsecureProtocol = true
+                    }
+                    credentials {
+                        username props['sonatype.user']
+                        password props['sonatype.password']
+                    }
+                }
+            }
+
+    }
+}
+
+//def createPrivateMaven(maven){
+//    maven {
+//        name 'Sonatype_Nexus'
+//        url this.ext.Sonatype_NexusUrl_Url
+//        allowInsecureProtocol = true
+//        credentials {
+//            username props['sonatype.user']
+//            password props['sonatype.password']
+//        }
+//    }
+//}
+
+
+
+////Ref : https://developer.android.com/studio/build/maven-publish-plugin
+////Ref : https://docs.gradle.org/current/userguide/publishing_maven.html#publishing_maven:tasks
+////Ref : https://stackoverflow.com/questions/26874498/publish-an-android-library-to-maven-with-aar-and-source-jar
+////Ref : https://github.com/gradle/gradle/issues/4783
+////Ref : https://blog.csdn.net/bangelua/article/details/95017031
+////Ref : https://blog.csdn.net/pxq10422/article/details/105127853/?utm_medium=distribute.pc_relevant.none-task-blog-title-8&spm=1001.2101.3001.4242
+////Ref : https://github.com/YuTianTina/ForMultiUploadMaven/blob/master/mylibrary/maven_variant_config.gradle
+////Ref : https://docs.gradle.org/current/userguide/publishing_maven.htm
+//project.afterEvaluate {
+//    publishing {
+//        publications {
+////            mavenPublish(MavenPublication) {
+////                if (checkIsAndroidProject()) {
+////                    def hasFlavors = false
+//////                    artifact bundleReleaseAar
+////                    android.libraryVariants.all { variant ->
+////                        if (variant.buildType.name.contains("debug")) {
+////                            return
+////                        }
+////                       hasFlavors = !variant.flavorName.isEmpty()
+////                        println "install Show libraryVariants hasFlavors : "+hasFlavors
+////                        def artifactIdSuffix = hasFlavors ? variant.flavorName.replace('_', '-').capitalize() : ''
+////                        println "install Show libraryVariants artifactIdSuffix  : "+artifactIdSuffix
+////                        def publicationName = "${variant.name.capitalize()}"
+////                        println "install Show libraryVariants publicationName  : "+publicationName
+//////                        def flavorbuildtype =variant.name
+//////                        println "install Show libraryVariants flavor with buildtype : "+flavorbuildtype
+//////                        if (flavorbuildtype.toString().contains("Release")){
+////////                            println "install Show libraryVariants flavor with buildtype UpperCase: "+flavorbuildtype.substring(0, 1).toUpperCase()+ flavorbuildtype.substring(1)
+//////                            def taskname =  "bundle"+flavorbuildtype.substring(0, 1).toUpperCase()+ flavorbuildtype.substring(1)+"Aar"
+////////                            println "install Show libraryVariants taskname : "+taskname
+//////                            artifact taskname
+//////                        }
+////                        def taskname ="bundle"+"${variant.name.capitalize()}"+"Aar"
+////                        artifact tasks.findByName(taskname)
+////                    }
+////
+////                    artifact androidJavadocsJar
+////                    artifact androidSourcesJar
+////                } else {
+////                    artifact jar
+////                    artifact sourcesJar
+////                    artifact javadocJar
+////                }
+////                //FIXME
+////                decoratePom(pom)
+////            }
+//            if (checkIsAndroidProject()) {
+//                def hasFlavors = false
+//                android.libraryVariants.all { variant ->
+//                    if (variant.buildType.name.contains("debug")) {
+//                        return
+//                    }
+//                    hasFlavors = !variant.flavorName.isEmpty()
+//                    if (hasFlavors) {
+//                        println "install Show libraryVariants hasFlavors : " + hasFlavors
+//                        def artifactIdSuffix = hasFlavors ? variant.flavorName.replace('_', '-').capitalize() : ''
+//                        variant.productFlavors.each { flavor ->
+//                            def flavorArtifactIdSuffix = flavor.ext.has('artifactIdSuffix') ? flavor.ext.artifactIdSuffix : flavor.name
+//                            if (!flavorArtifactIdSuffix.isEmpty()) {
+//                                artifactIdSuffix = artifactIdSuffix.replace(flavor.name.capitalize(), "${flavorArtifactIdSuffix}")
+//                            } else {
+//                                artifactIdSuffix = artifactIdSuffix.replace(flavor.name.capitalize(), "")
+//                            }
+//                        }
+//                        println "install Show libraryVariants artifactIdSuffix  : " + artifactIdSuffix
+//
+//                        def publicationName = "${variant.name.capitalize()}"
+////                        println "install Show libraryVariants publicationName  : " + publicationName
+////                        def flavorbuildtype =variant.name
+////                        println "install Show libraryVariants flavor with buildtype : "+flavorbuildtype
+////                        if (flavorbuildtype.toString().contains("Release")){
+//////                            println "install Show libraryVariants flavor with buildtype UpperCase: "+flavorbuildtype.substring(0, 1).toUpperCase()+ flavorbuildtype.substring(1)
+////                            def taskname =  "bundle"+flavorbuildtype.substring(0, 1).toUpperCase()+ flavorbuildtype.substring(1)+"Aar"
+//////                            println "install Show libraryVariants taskname : "+taskname
+////                            artifact taskname
+////                        }
+//                        "$publicationName"(MavenPublication) {
+////                            artifactId curArtifactId
+////                            from components.findByName("android${variant.name.capitalize()}")
+//                            artifact androidJavadocsJar
+//                            artifact androidSourcesJar
+////                            artifact jniSymbolsJar
+//                            def taskname = "bundle" + "${variant.name.capitalize()}" + "Aar"
+//                            artifact tasks.findByName(taskname)
+//                        }
+//                    } else {
+////                        mavenPublish(MavenPublication) {
+//                        release(MavenPublication) {
+//                            println "Show  here !!! release : "
+//                            artifact bundleReleaseAar
+//                            artifact androidJavadocsJar
+//                            artifact androidSourcesJar
+//                            decoratePom(pom)
+//                        }
+//                    }
+//                }
+//            } else {
+//                mavenPublish(MavenPublication) {
+//                    artifact jar
+//                    artifact sourcesJar
+//                    artifact javadocJar
+//                    decoratePom(pom)
+//                }
+//            }
+//        }
+
+////apply plugin: 'de.marcphilipp.nexus-publish'
+////nexusPublishing {
+////    repositories {
+////        myNexus {
+////            File f = this.file('sonatype_nexus.properties')
+////            if (f.exists() && !f.isDirectory()) {
+////                Properties props = new Properties()
+////                props.load(new FileInputStream(f))
+////                username props['sonatype.user']
+////                password props['sonatype.password']
+////            }
+////        }
+////    }
+////}
+//
+def decoratePom(pom) {
+    pom.name = this.archivesBaseName.replace("-", "_")
+    pom.description = this.ext.mavLibraryDescription
+    pom.url = this.ext.mavSiteUrl
+    pom.inceptionYear = new Date().format("yyyy-MM-dd").toString()
+
+    pom.licenses {
+        license {
+            this.ext.mavLibraryLicenses.each { key, value ->
+                name = key
+                url = value
+            }
+        }
+    }
+
+    pom.developers {
+        developer {
+            id = this.ext.developerid
+            name = this.ext.developername
+            email = this.ext.developeremail
+        }
+    }
+    pom.scm {
+        connection = this.ext.scmConnectionUrl
+        developerConnection = this.ext.scmDeveloperConnectionUrl
+        url = this.ext.scmUrl
+    }
+    addDependencies(pom)
+}
+
+def addDependencies(pom) {
+    pom.withXml {
+        final dependenciesNode = asNode().appendNode('dependencies')
+        ext.addDependency = { Dependency dep, String scope ->
+            if (dep.group == null || dep.version == null || dep.name == null || dep.name == "unspecified" || dep.version == "unspecified")
+                return // ignore invalid dependencies
+
+            if (dep.artifacts.size() > 0) {
+                dep.artifacts.each { art ->
+                    addDependencyNode(dependenciesNode, dep, scope, art.classifier, art.extension)
+                }
+            } else {
+                addDependencyNode(dependenciesNode, dep, scope, null, null)
+            }
+        }
+        manageConfigurations(configurations)
+    }
+}
+
+def manageConfigurations(configurations) {
+    def gradle_main_version = Integer.parseInt(gradle.gradleVersion.toString().split("\\.")[0])
+    if (gradle_main_version > 6) {
+        if (!checkIsAndroidProject()) {
+            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.runtime.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.testRuntime.getDependencies().each { dep -> addDependency(dep, "test") }
+        } else {
+            configurations.api.getDependencies().each { dep -> addDependency(dep, "compile") }
+            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "compile") }
+            configurations.compileOnly.getDependencies().each { dep -> addDependency(dep, "runtime") }
+        }
+        configurations.testImplementation.getDependencies().each { dep -> addDependency(dep, "test") }
+    } else {
+        configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
+        configurations.testCompile.getDependencies().each { dep -> addDependency(dep, "test") }
+    }
+}
+
+//Ref : https://stackoverflow.com/questions/32998716/maven-publish-cannot-not-apply-withxml-on-pom-file-no-signature-of-method
+def addDependencyNode(dependenciesNode, dep, scope, classifier, extension) {
+    final dependencyNode = dependenciesNode.appendNode('dependency')
+    dependencyNode.appendNode('groupId', dep.group)
+    dependencyNode.appendNode('artifactId', dep.name)
+    dependencyNode.appendNode('version', dep.version)
+
+    if (classifier != null) {
+        dependencyNode.appendNode('classifier', classifier)
+    }
+
+    if (extension != null) {
+        dependencyNode.appendNode('type', extension)
+    }
+
+    dependencyNode.appendNode('scope', scope)
+
+    if (!dep.transitive) {
+        // If this dependency is transitive, we should force exclude all its dependencies them from the POM
+        final exclusionNode = dependencyNode.appendNode('exclusions').appendNode('exclusion')
+        exclusionNode.appendNode('artifactId', '*')
+        exclusionNode.appendNode('groupId', '*')
+    } else if (!dep.properties.excludeRules.empty) {
+        // Otherwise add specified exclude rules
+        final exclusionsNode = dependencyNode.appendNode('exclusions')
+        dep.properties.excludeRules.each { ExcludeRule rule ->
+            final exclusionNode = exclusionsNode.appendNode('exclusion')
+            exclusionNode.appendNode('artifactId', rule.module ?: '*')
+            exclusionNode.appendNode('groupId', rule.group ?: '*')
+        }
+    }
+}

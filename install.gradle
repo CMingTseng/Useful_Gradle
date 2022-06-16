@@ -14,22 +14,21 @@
 apply plugin: 'maven-publish'
 version = this.project.version
 group = this.project.group
-
-def pomArtifactId = this.archivesBaseName.replace("-", "_")
+def pomArtifactId = this.archivesBaseName
 tasks.withType(Javadoc).all { enabled = false }
 
 def checkIsAndroidProject() {
     def plugins = project.getPlugins()
     return plugins.hasPlugin('com.android.application') || plugins.hasPlugin('com.android.library')
 }
-def isToGit = this.ext.has("isToGit")
 
+def isToGit = this.ext.has("isToGit")
+def advanced_type = this.ext.has("isAdvanced") ? this.ext.isAdvanced : 0
 if (checkIsAndroidProject()) {
     task androidJavadocs(type: Javadoc) {
         description "Generates Javadoc"
         source = android.sourceSets.main.java.srcDirs
         classpath += files(android.bootClasspath)
-
         android.libraryVariants.all { variant ->
             if (variant.name.contains("release")) {
                 owner.classpath += variant.javaCompileProvider.get().classpath
@@ -103,13 +102,28 @@ publishing {
     publications {
         if (checkIsAndroidProject()) {
             android.libraryVariants.all { variant ->
-                def flavor_with_buildtype = variant.name.capitalize()
+                def flavor_with_buildtype = variant.name
+                flavor_with_buildtype = variant.name.capitalize()
+                println "Show flavor_with_buildtype : " + flavor_with_buildtype
+                println "Show pomArtifactId : " + pomArtifactId
+                println "Show  version : " + version
                 def hasFlavors = !variant.flavorName.isEmpty()
                 def build_type = variant.buildType.name
-                def artifactIdSuffix = hasFlavors ? variant.flavorName.replace('_', '-').capitalize() : pomArtifactId
+                println "Show  build_type : " + build_type
+                def artifactIdSuffix = hasFlavors ? variant.flavorName.capitalize() : pomArtifactId
                 def publicationName = "${variant.name.capitalize()}"
-                variant.outputs.all {
-                    outputFileName = outputFileName.replace("-", "_")
+
+                if ((advanced_type % 2) == 0) {
+                    if (build_type.toLowerCase().contains("debug")) {
+                        return
+                    }
+                    if (build_type.toLowerCase() != "release" ){
+                        publicationName = publicationName.replace("release", "").replace("_", "").replace("-", "")
+                    }else {
+                         if (hasFlavors){
+                             publicationName = publicationName.replace(build_type.capitalize(), "")
+                         }
+                    }
                 }
                 variant.productFlavors.each { flavor ->
                     def flavorArtifactIdSuffix = flavor.ext.has('artifactIdSuffix') ? flavor.ext.artifactIdSuffix : flavor.name
@@ -119,10 +133,18 @@ publishing {
                         artifactIdSuffix = artifactIdSuffix.replace(flavor.name.capitalize(), "")
                     }
                 }
-
                 "$publicationName"(MavenPublication) {
                     groupId = this.project.group
-                    artifactId "${this.archivesBaseName.replace("-", "_")}_$publicationName"
+                    if ((advanced_type % 2) == 0) {
+                        if (hasFlavors){
+                            artifactId "${this.archivesBaseName}_$publicationName"
+                        }else {
+                            artifactId "${this.archivesBaseName}"
+                        }
+                    }else {
+                        artifactId "${this.archivesBaseName}_$publicationName"
+                    }
+                    println "Show artifactId : " + artifactId
                     version = this.project.version
                     artifact androidJavadocsJar
                     artifact androidSourcesJar
@@ -233,8 +255,8 @@ publishing {
 }
 
 def decoratePom(pom) {
-    pom.name = this.archivesBaseName.replace("-", "_")
-    pom.description = this.ext.mavLibraryDescription
+    pom.name = this.archivesBaseName
+    pom.description = this.description
     pom.url = this.ext.mavSiteUrl
     pom.inceptionYear = new Date().format("yyyy-MM-dd").toString()
 
@@ -285,15 +307,17 @@ def manageConfigurations(configurations) {
     def gradle_main_version = Integer.parseInt(gradle.gradleVersion.toString().split("\\.")[0])
     if (gradle_main_version > 6) {
         if (!checkIsAndroidProject()) {
-            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.implementation.getDependencies().each { dep -> addDependency(dep, "compile") }
+            configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
             configurations.runtime.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.testCompile.getDependencies().each { dep -> addDependency(dep, "test") }
             configurations.testRuntime.getDependencies().each { dep -> addDependency(dep, "test") }
         } else {
             configurations.api.getDependencies().each { dep -> addDependency(dep, "compile") }
             configurations.implementation.getDependencies().each { dep -> addDependency(dep, "compile") }
             configurations.compileOnly.getDependencies().each { dep -> addDependency(dep, "runtime") }
+            configurations.testImplementation.getDependencies().each { dep -> addDependency(dep, "test") }
         }
-        configurations.testImplementation.getDependencies().each { dep -> addDependency(dep, "test") }
     } else {
         configurations.compile.getDependencies().each { dep -> addDependency(dep, "compile") }
         configurations.testCompile.getDependencies().each { dep -> addDependency(dep, "test") }

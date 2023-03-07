@@ -1,0 +1,62 @@
+ext {
+    check_full_true_colors_file = this.&readVersionWithFlavor
+}
+
+def checkAndCreateFullTrueColorsFile() {
+    def colorsFile = file('src/main/res/values/full_true_colors.xml')
+    doLast {
+        if (!colorsFile.exists()) {
+            println "Colors file doesn't exist. Creating a new one..."
+            colorsFile.parentFile.mkdirs()
+            colorsFile.createNewFile()
+            def writer = new BufferedWriter(new FileWriter(colorsFile))
+            writer.write("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
+            writer.write("<resources>\n")
+            for (int alpha = 0; alpha <= 255; alpha++) {
+                for (int red = 0; red <= 255; red++) {
+                    for (int green = 0; green <= 255; green++) {
+                        for (int blue = 0; blue <= 255; blue++) {
+                            String hexColor = String.format("#%02X%02X%02X%02X", alpha, red, green, blue);
+                            String colorName = String.format("color_%d_%d_%d_%d", alpha, red, green, blue);
+                            writer.write(String.format("    <color name=\"%s\">%s</color>\n", colorName, hexColor))
+                        }
+                    }
+                }
+            }
+            writer.write("</resources>\n")
+            writer.flush()
+            writer.close()
+            println "Colors file generated."
+        } else {
+            println "Colors file exists."
+        }
+    }
+}
+
+task checkAndCreateColorsFile {
+    def colorsFile = file('src/main/res/values/full_true_colors.xml')
+    doLast {
+        if (!colorsFile.exists()) {
+            println "Colors file doesn't exist. Creating a new one..."
+            colorsFile.parentFile.mkdirs()
+            colorsFile.createNewFile()
+            colorsFile.write("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n")
+            colorsFile.write("<resources>\n")
+            for (int alpha = 0; alpha <= 255; alpha++) {
+                for (int red = 0; red <= 255; red++) {
+                    for (int green = 0; green <= 255; green++) {
+                        for (int blue = 0; blue <= 255; blue++) {
+                            String hexColor = String.format("#%02X%02X%02X%02X", alpha, red, green, blue);
+                            String colorName = String.format("color_%d_%d_%d_%d", alpha, red, green, blue);
+                            colorsFile.write(String.format("    <color name=\"%s\">%s</color>\n", colorName, hexColor))
+                        }
+                    }
+                }
+            }
+            colorsFile.write("</resources>\n")
+            println "Colors file generated."
+        } else {
+            println "Colors file exists."
+        }
+    }
+}
